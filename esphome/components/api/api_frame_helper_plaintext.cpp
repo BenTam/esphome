@@ -235,8 +235,8 @@ APIError APIPlaintextFrameHelper::write_protobuf_packets(ProtoWriteBuffer buffer
 
   for (const auto &packet : packets) {
     // Calculate varint sizes for header layout
-    uint8_t size_varint_len = api::ProtoSize::varint(static_cast<uint32_t>(packet.payload_size));
-    uint8_t type_varint_len = api::ProtoSize::varint(static_cast<uint32_t>(packet.message_type));
+    uint8_t size_varint_len = api::ProtoSize::varint(packet.payload_size);
+    uint8_t type_varint_len = api::ProtoSize::varint(packet.message_type);
     uint8_t total_header_len = 1 + size_varint_len + type_varint_len;
 
     // Calculate where to start writing the header
@@ -271,9 +271,8 @@ APIError APIPlaintextFrameHelper::write_protobuf_packets(ProtoWriteBuffer buffer
     buf_start[header_offset] = 0x00;  // indicator
 
     // Encode varints directly into buffer
-    ProtoVarInt(packet.payload_size).encode_to_buffer_unchecked(buf_start + header_offset + 1, size_varint_len);
-    ProtoVarInt(packet.message_type)
-        .encode_to_buffer_unchecked(buf_start + header_offset + 1 + size_varint_len, type_varint_len);
+    encode_varint_unchecked(buf_start + header_offset + 1, packet.payload_size);
+    encode_varint_unchecked(buf_start + header_offset + 1 + size_varint_len, packet.message_type);
 
     // Add iovec for this packet (header + payload)
     size_t packet_len = static_cast<size_t>(total_header_len + packet.payload_size);

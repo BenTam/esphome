@@ -124,34 +124,6 @@ class ProtoVarInt {
     // with ZigZag encoding
     return decode_zigzag64(this->value_);
   }
-  /**
-   * Encode the varint value to a pre-allocated buffer without bounds checking.
-   *
-   * @param buffer The pre-allocated buffer to write the encoded varint to
-   * @param len The size of the buffer in bytes
-   *
-   * @note The caller is responsible for ensuring the buffer is large enough
-   *       to hold the encoded value. Use ProtoSize::varint() to calculate
-   *       the exact size needed before calling this method.
-   * @note No bounds checking is performed for performance reasons.
-   */
-  void encode_to_buffer_unchecked(uint8_t *buffer, size_t len) {
-    uint64_t val = this->value_;
-    if (val <= 0x7F) {
-      buffer[0] = val;
-      return;
-    }
-    size_t i = 0;
-    while (val && i < len) {
-      uint8_t temp = val & 0x7F;
-      val >>= 7;
-      if (val) {
-        buffer[i++] = temp | 0x80;
-      } else {
-        buffer[i++] = temp;
-      }
-    }
-  }
   void encode(std::vector<uint8_t> &out) {
     uint64_t val = this->value_;
     if (val <= 0x7F) {
@@ -330,6 +302,28 @@ class ProtoWriteBuffer {
   std::vector<uint8_t> *buffer_;
 };
 
+/**
+ * @brief Encode a uint16_t value as a varint directly to a buffer without bounds checking
+ *
+ * @param buffer The pre-allocated buffer to write the encoded varint to
+ * @param value The uint16_t value to encode (0-65535)
+ *
+ * @note The caller is responsible for ensuring the buffer is large enough (max 3 bytes for uint16_t)
+ * @note No bounds checking is performed for performance reasons
+ */
+inline void encode_varint_unchecked(uint8_t *buffer, uint16_t value) {
+  if (value < 128) {
+    buffer[0] = value;
+  } else if (value < 16384) {
+    buffer[0] = (value & 0x7F) | 0x80;
+    buffer[1] = value >> 7;
+  } else {
+    buffer[0] = (value & 0x7F) | 0x80;
+    buffer[1] = ((value >> 7) & 0x7F) | 0x80;
+    buffer[2] = value >> 14;
+  }
+}
+
 // Forward declaration
 class ProtoSize;
 
@@ -387,6 +381,33 @@ class ProtoSize {
   uint32_t get_size() const { return total_size_; }
 
   /**
+   * @brief Calculates the size in bytes needed to encode a uint8_t value as a varint
+   *
+   * @param value The uint8_t value to calculate size for
+   * @return The number of bytes needed to encode the value (1 or 2)
+   */
+  static constexpr uint8_t varint(uint8_t value) {
+    // For uint8_t (0-255), we need at most 2 bytes
+    return (value < 128) ? 1 : 2;
+  }
+
+  /**
+   * @brief Calculates the size in bytes needed to encode a uint16_t value as a varint
+   *
+   * @param value The uint16_t value to calculate size for
+   * @return The number of bytes needed to encode the value (1-3)
+   */
+  static constexpr uint8_t varint(uint16_t value) {
+    // For uint16_t (0-65535), we need at most 3 bytes
+    if (value < 128)
+      return 1;  // 7 bits
+    else if (value < 16384)
+      return 2;  // 14 bits
+    else
+      return 3;  // 15-16 bits
+  }
+
+  /**
    * @brief Calculates the size in bytes needed to encode a uint32_t value as a varint
    *
    * @param value The uint32_t value to calculate size for
@@ -395,11 +416,9 @@ class ProtoSize {
   static constexpr uint32_t varint(uint32_t value) {
     // Optimized varint size calculation using leading zeros
     // Each 7 bits requires one byte in the varint encoding
-    if (value < 128)
+    if (value < 128) {
       return 1;  // 7 bits, common case for small values
-
-    // For larger values, count bytes needed based on the position of the highest bit set
-    if (value < 16384) {
+    } else if (value < 16384) {
       return 2;  // 14 bits
     } else if (value < 2097152) {
       return 3;  // 21 bits
@@ -773,7 +792,7 @@ inline void ProtoWriteBuffer::encode_message(uint32_t field_id, const ProtoMessa
   this->buffer_->resize(this->buffer_->size() + varint_length_bytes);
 
   // Write the length varint directly
-  ProtoVarInt(msg_length_bytes).encode_to_buffer_unchecked(this->buffer_->data() + begin, varint_length_bytes);
+  encode_varint_unchecked(this->buffer_->data() + begin, static_cast<uint16_t>(msg_length_bytes));
 
   // Now encode the message content - it will append to the buffer
   value.encode(*this);
