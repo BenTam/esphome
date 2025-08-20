@@ -11,6 +11,7 @@
 #include <utility>
 #include <functional>
 #include <limits>
+#include "api_timing.h"
 #include "esphome/components/network/util.h"
 #include "esphome/core/application.h"
 #include "esphome/core/entity_base.h"
@@ -140,7 +141,9 @@ void APIConnection::loop() {
     return;
   }
 
+  API_TIMING_START(helper);
   APIError err = this->helper_->loop();
+  API_TIMING_END(helper, HELPER_LOOP);
   if (err != APIError::OK) {
     on_fatal_error();
     this->log_socket_operation_failed_(err);
@@ -149,11 +152,16 @@ void APIConnection::loop() {
 
   const uint32_t now = App.get_loop_component_start_time();
   // Check if socket has data ready before attempting to read
-  if (this->helper_->is_socket_ready()) {
+  API_TIMING_START(socket_check);
+  bool socket_ready = this->helper_->is_socket_ready();
+  API_TIMING_END(socket_check, SOCKET_CHECK);
+  if (socket_ready) {
     // Read up to MAX_MESSAGES_PER_LOOP messages per loop to improve throughput
     for (uint8_t message_count = 0; message_count < MAX_MESSAGES_PER_LOOP; message_count++) {
       ReadPacketBuffer buffer;
+      API_TIMING_START(read);
       err = this->helper_->read_packet(&buffer);
+      API_TIMING_END(read, READ_PACKET);
       if (err == APIError::WOULD_BLOCK) {
         // No more data available
         break;
@@ -164,11 +172,13 @@ void APIConnection::loop() {
       } else {
         this->last_traffic_ = now;
         // read a packet
+        API_TIMING_START(process);
         if (buffer.data_len > 0) {
           this->read_message(buffer.data_len, buffer.type, &buffer.container[buffer.data_offset]);
         } else {
           this->read_message(0, buffer.type, nullptr);
         }
+        API_TIMING_END(process, PROCESS_MESSAGE);
         if (this->flags_.remove)
           return;
       }
@@ -177,19 +187,27 @@ void APIConnection::loop() {
 
   // Process deferred batch if scheduled and timer has expired
   if (this->flags_.batch_scheduled && now - this->deferred_batch_.batch_start_time >= this->get_batch_delay_ms_()) {
+    API_TIMING_START(deferred);
     this->process_batch_();
+    API_TIMING_END(deferred, DEFERRED_BATCH);
   }
 
   if (!this->list_entities_iterator_.completed()) {
+    API_TIMING_START(iterator1);
     this->process_iterator_batch_(this->list_entities_iterator_);
+    API_TIMING_END(iterator1, ITERATOR_BATCH);
   } else if (!this->initial_state_iterator_.completed()) {
+    API_TIMING_START(iterator2);
     this->process_iterator_batch_(this->initial_state_iterator_);
+    API_TIMING_END(iterator2, ITERATOR_BATCH);
 
     // If we've completed initial states, process any remaining and clear the flag
     if (this->initial_state_iterator_.completed()) {
       // Process any remaining batched messages immediately
       if (!this->deferred_batch_.empty()) {
+        API_TIMING_START(deferred2);
         this->process_batch_();
+        API_TIMING_END(deferred2, DEFERRED_BATCH);
       }
       // Now that everything is sent, enable immediate sending for future state changes
       this->flags_.should_try_send_immediately = true;
@@ -203,6 +221,7 @@ void APIConnection::loop() {
       ESP_LOGW(TAG, "%s is unresponsive; disconnecting", this->get_client_combined_info().c_str());
     }
   } else if (now - this->last_traffic_ > KEEPALIVE_TIMEOUT_MS && !this->flags_.remove) {
+    API_TIMING_GUARD(KEEPALIVE);
     // Only send ping if we're not disconnecting
     ESP_LOGVV(TAG, "Sending keepalive PING");
     PingRequest req;
@@ -219,6 +238,7 @@ void APIConnection::loop() {
 
 #ifdef USE_CAMERA
   if (this->image_reader_ && this->image_reader_->available() && this->helper_->can_write_without_blocking()) {
+    API_TIMING_GUARD(CAMERA_IMAGE);
     uint32_t to_send = std::min((size_t) MAX_BATCH_PACKET_SIZE, this->image_reader_->available());
     bool done = this->image_reader_->available() == to_send;
 
@@ -273,9 +293,11 @@ uint16_t APIConnection::encode_message_to_buffer(ProtoMessage &msg, uint8_t mess
 #endif
 
   // Calculate size
+  API_TIMING_START(msg_size_calc);
   ProtoSize size_calc;
   msg.calculate_size(size_calc);
   uint32_t calculated_size = size_calc.get_size();
+  API_TIMING_END(msg_size_calc, ENCODE_MESSAGE);
 
   // Cache frame sizes to avoid repeated virtual calls
   const uint8_t header_padding = conn->helper_->frame_header_padding();
@@ -308,7 +330,9 @@ uint16_t APIConnection::encode_message_to_buffer(ProtoMessage &msg, uint8_t mess
 
   // Encode directly into buffer
   size_t size_before_encode = shared_buf.size();
+  API_TIMING_START(msg_encode);
   msg.encode({&shared_buf});
+  API_TIMING_END(msg_encode, ENCODE_MESSAGE);
 
   // Calculate actual encoded size (not including header that was already added)
   size_t actual_payload_size = shared_buf.size() - size_before_encode;
@@ -1560,7 +1584,9 @@ bool APIConnection::send_buffer(ProtoWriteBuffer buffer, uint8_t message_type) {
     return false;
   }
 
+  API_TIMING_START(write);
   APIError err = this->helper_->write_protobuf_packet(message_type, buffer);
+  API_TIMING_END(write, WRITE_PACKET);
   if (err == APIError::WOULD_BLOCK)
     return false;
   if (err != APIError::OK) {
@@ -1636,11 +1662,14 @@ void APIConnection::process_batch_() {
     return;
   }
 
+  API_TIMING_START(buffer_clear);
   // Try to clear buffer first
   if (!this->try_to_clear_buffer(true)) {
     // Can't write now, we'll try again later
+    API_TIMING_END(buffer_clear, BUFFER_MANAGEMENT);
     return;
   }
+  API_TIMING_END(buffer_clear, BUFFER_MANAGEMENT);
 
   // Get shared buffer reference once to avoid multiple calls
   auto &shared_buf = this->parent_->get_shared_buffer_ref();
@@ -1651,8 +1680,10 @@ void APIConnection::process_batch_() {
     const auto &item = this->deferred_batch_[0];
 
     // Let the creator calculate size and encode if it fits
+    API_TIMING_START(single_encode);
     uint16_t payload_size =
         item.creator(item.entity, this, std::numeric_limits<uint16_t>::max(), true, item.message_type);
+    API_TIMING_END(single_encode, BATCH_ENCODE);
 
     if (payload_size > 0 && this->send_buffer(ProtoWriteBuffer{&shared_buf}, item.message_type)) {
 #ifdef HAS_PROTO_MESSAGE_DUMP
@@ -1705,11 +1736,14 @@ void APIConnection::process_batch_() {
   uint32_t current_offset = 0;
 
   // Process items and encode directly to buffer (up to our limit)
+  API_TIMING_START(batch_encode_loop);
   for (size_t i = 0; i < packets_to_process; i++) {
     const auto &item = this->deferred_batch_[i];
     // Try to encode message
     // The creator will calculate overhead to determine if the message fits
+    API_TIMING_START(item_encode);
     uint16_t payload_size = item.creator(item.entity, this, remaining_size, false, item.message_type);
+    API_TIMING_END(item_encode, BATCH_ENCODE);
 
     if (payload_size == 0) {
       // Message won't fit, stop processing
@@ -1736,6 +1770,7 @@ void APIConnection::process_batch_() {
     // Current buffer size + footer space for this message
     current_offset = shared_buf.size() + footer_size;
   }
+  API_TIMING_END(batch_encode_loop, BATCH_ENCODE);
 
   if (items_processed == 0) {
     this->deferred_batch_.clear();
@@ -1748,8 +1783,10 @@ void APIConnection::process_batch_() {
   }
 
   // Send all collected packets
+  API_TIMING_START(batch_write);
   APIError err = this->helper_->write_protobuf_packets(ProtoWriteBuffer{&shared_buf},
                                                        std::span<const PacketInfo>(packet_info, packet_count));
+  API_TIMING_END(batch_write, PROTO_WRITE);
   if (err != APIError::OK && err != APIError::WOULD_BLOCK) {
     on_fatal_error();
     this->log_warning_("Batch write failed", err);

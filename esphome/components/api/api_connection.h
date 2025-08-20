@@ -6,6 +6,7 @@
 #include "api_pb2.h"
 #include "api_pb2_service.h"
 #include "api_server.h"
+#include "api_timing.h"
 #include "esphome/core/application.h"
 #include "esphome/core/component.h"
 #include "esphome/core/entity_base.h"
@@ -335,9 +336,11 @@ class APIConnection final : public APIServerConnection {
   // Helper method to process multiple entities from an iterator in a batch
   template<typename Iterator> void process_iterator_batch_(Iterator &iterator) {
     size_t initial_size = this->deferred_batch_.size();
+    API_TIMING_START(iter_advance);
     while (!iterator.completed() && (this->deferred_batch_.size() - initial_size) < MAX_INITIAL_PER_BATCH) {
       iterator.advance();
     }
+    API_TIMING_END(iter_advance, ITERATOR_ENCODE);
 
     // If the batch is full, process it immediately
     // Note: iterator.advance() already calls schedule_batch_() via schedule_message_()
@@ -681,6 +684,7 @@ class APIConnection final : public APIServerConnection {
   // Helper method to send a message either immediately or via batching
   bool send_message_smart_(EntityBase *entity, MessageCreatorPtr creator, uint8_t message_type,
                            uint8_t estimated_size) {
+    API_TIMING_GUARD(SEND_STATE);
     // Try to send immediately if:
     // 1. It's an UpdateStateResponse (always send immediately to handle cases where
     //    the main loop is blocked, e.g., during OTA updates)

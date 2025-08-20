@@ -1,6 +1,7 @@
 // This file was automatically generated with a tool.
 // See script/api_protobuf/api_protobuf.py
 #include "api_pb2_service.h"
+#include "api_timing.h"
 #include "esphome/core/log.h"
 
 namespace esphome::api {
@@ -14,14 +15,18 @@ void APIServerConnectionBase::log_send_message_(const char *name, const std::str
 #endif
 
 void APIServerConnectionBase::read_message(uint32_t msg_size, uint32_t msg_type, uint8_t *msg_data) {
+  API_TIMING_START(msg_decode);
   switch (msg_type) {
     case HelloRequest::MESSAGE_TYPE: {
       HelloRequest msg;
       msg.decode(msg_data, msg_size);
+      API_TIMING_END(msg_decode, PROTO_READ);
 #ifdef HAS_PROTO_MESSAGE_DUMP
       ESP_LOGVV(TAG, "on_hello_request: %s", msg.dump().c_str());
 #endif
+      API_TIMING_START(msg_handle);
       this->on_hello_request(msg);
+      API_TIMING_END(msg_handle, MESSAGE_DISPATCH);
       break;
     }
     case ConnectRequest::MESSAGE_TYPE: {

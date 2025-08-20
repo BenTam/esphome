@@ -2,6 +2,7 @@
 #ifdef USE_API
 #include <cerrno>
 #include "api_connection.h"
+#include "api_timing.h"
 #include "esphome/components/network/util.h"
 #include "esphome/core/application.h"
 #include "esphome/core/defines.h"
@@ -135,6 +136,7 @@ void APIServer::schedule_reboot_timeout_() {
 void APIServer::loop() {
   // Accept new clients only if the socket exists and has incoming connections
   if (this->socket_ && this->socket_->ready()) {
+    API_TIMING_GUARD(ACCEPT_CLIENT);
     while (true) {
       struct sockaddr_storage source_addr;
       socklen_t addr_len = sizeof(source_addr);
@@ -161,6 +163,7 @@ void APIServer::loop() {
 
   // Process clients and remove disconnected ones in a single pass
   // Check network connectivity once for all clients
+  API_TIMING_START(network_check);
   if (!network::is_connected()) {
     // Network is down - disconnect all clients
     for (auto &client : this->clients_) {
@@ -169,6 +172,7 @@ void APIServer::loop() {
     }
     // Continue to process and clean up the clients below
   }
+  API_TIMING_END(network_check, NETWORK_CHECK);
 
   size_t client_index = 0;
   while (client_index < this->clients_.size()) {
@@ -176,12 +180,15 @@ void APIServer::loop() {
 
     if (!client->flags_.remove) {
       // Common case: process active client
+      API_TIMING_START(client_loop);
       client->loop();
+      API_TIMING_END(client_loop, CLIENT_LOOP);
       client_index++;
       continue;
     }
 
     // Rare case: handle disconnection
+    API_TIMING_GUARD(CLIENT_REMOVAL);
 #ifdef USE_API_CLIENT_DISCONNECTED_TRIGGER
     this->client_disconnected_trigger_->trigger(client->client_info_.name, client->client_info_.peername);
 #endif

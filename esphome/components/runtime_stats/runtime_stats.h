@@ -103,11 +103,7 @@ class RuntimeStatsCollector {
  protected:
   void log_stats_();
 
-  void reset_stats_() {
-    for (auto &it : this->component_stats_) {
-      it.second.reset_period_stats();
-    }
-  }
+  void reset_stats_();
 
   // Use const char* keys for efficiency
   // Custom comparator for const char* keys in map

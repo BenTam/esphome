@@ -4,6 +4,10 @@
 
 #include "esphome/core/component.h"
 #include <algorithm>
+#include <cinttypes>
+#ifdef USE_API
+#include "esphome/components/api/api_timing.h"
+#endif
 
 namespace esphome {
 
@@ -62,6 +66,29 @@ void RuntimeStatsCollector::log_stats_() {
              stats->get_period_time_ms());
   }
 
+#ifdef USE_API
+  // Log detailed API timing breakdown if available
+  bool has_api_timing = false;
+  for (int i = 0; i < static_cast<int>(api::APITimingCategory::MAX_CATEGORIES); i++) {
+    if (api::api_timing_stats[i].count > 0) {
+      has_api_timing = true;
+      break;
+    }
+  }
+
+  if (has_api_timing) {
+    ESP_LOGI(TAG, "API Component Breakdown (microseconds):");
+    for (int i = 0; i < static_cast<int>(api::APITimingCategory::MAX_CATEGORIES); i++) {
+      const api::APITimingStats &stats = api::api_timing_stats[i];
+      if (stats.count > 0) {
+        const char *category_name = api::api_timing_category_to_str(static_cast<api::APITimingCategory>(i));
+        ESP_LOGI(TAG, "    %s: count=%" PRIu32 ", avg=%.1fus, max=%" PRIu32 "us, total=%" PRIu64 "us", category_name,
+                 stats.count, stats.get_avg_us(), stats.max_us, stats.total_us);
+      }
+    }
+  }
+#endif
+
   // Log total stats since boot
   ESP_LOGI(TAG, "Total stats (since boot):");
 
@@ -79,6 +106,16 @@ void RuntimeStatsCollector::log_stats_() {
              stats->get_total_count(), stats->get_total_avg_time_ms(), stats->get_total_max_time_ms(),
              stats->get_total_time_ms());
   }
+}
+
+void RuntimeStatsCollector::reset_stats_() {
+  for (auto &it : this->component_stats_) {
+    it.second.reset_period_stats();
+  }
+#ifdef USE_API
+  // Reset API timing stats for next period
+  api::reset_api_timing_stats();
+#endif
 }
 
 void RuntimeStatsCollector::process_pending_stats(uint32_t current_time) {
