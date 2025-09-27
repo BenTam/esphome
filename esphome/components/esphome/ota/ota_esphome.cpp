@@ -255,11 +255,10 @@ void ESPHomeOTAComponent::handle_handshake_() {
 
     case OTAState::DATA:
       this->handle_data_();
-      return;
+      [[fallthrough]];
 
-    case OTAState::IDLE:
-      // This shouldn't happen
-      return;
+    default:
+      break;
   }
 }
 
