@@ -302,7 +302,11 @@ void ESPHomeOTAComponent::handle_data_() {
     this->log_read_error_(LOG_STR("size"));
     goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
   }
-  ota_size = convert_big_endian(*reinterpret_cast<uint32_t *>(buf));
+  ota_size = 0;
+  for (uint8_t i = 0; i < 4; i++) {
+    ota_size <<= 8;
+    ota_size |= buf[i];
+  }
   ESP_LOGV(TAG, "Size is %u bytes", ota_size);
 
   // Now that we've passed authentication and are actually
