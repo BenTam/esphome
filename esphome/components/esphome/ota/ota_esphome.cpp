@@ -497,7 +497,7 @@ void ESPHomeOTAComponent::log_start_(const LogString *phase) {
 }
 
 void ESPHomeOTAComponent::log_remote_closed_(const LogString *during) {
-  ESP_LOGW(TAG, "Remote closed during %s", LOG_STR_ARG(during));
+  ESP_LOGW(TAG, "Remote closed at %s", LOG_STR_ARG(during));
 }
 
 bool ESPHomeOTAComponent::handle_read_error_(ssize_t read, const LogString *desc) {
