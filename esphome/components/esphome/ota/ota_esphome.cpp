@@ -183,21 +183,16 @@ void ESPHomeOTAComponent::handle_handshake_() {
 
       // Magic bytes valid, move to next state
       this->transition_ota_state_(OTAState::MAGIC_ACK);
+      this->handshake_buf_[0] = ota::OTA_RESPONSE_OK;
+      this->handshake_buf_[1] = USE_OTA_VERSION;
       [[fallthrough]];
     }
 
     case OTAState::MAGIC_ACK: {
       // Send OK and version - 2 bytes
-      // Prepare response in handshake buffer if not already done
-      if (this->handshake_buf_pos_ == 0) {
-        this->handshake_buf_[0] = ota::OTA_RESPONSE_OK;
-        this->handshake_buf_[1] = USE_OTA_VERSION;
-      }
-
       if (!this->try_write_(2, LOG_STR("ack magic"))) {
         return;
       }
-
       // All bytes sent, create backend and move to next state
       this->backend_ = ota::make_ota_backend();
       this->transition_ota_state_(OTAState::FEATURE_READ);
@@ -209,27 +204,21 @@ void ESPHomeOTAComponent::handle_handshake_() {
       if (!this->try_read_(1, LOG_STR("read feature"))) {
         return;
       }
-
       this->ota_features_ = this->handshake_buf_[0];
       ESP_LOGV(TAG, "Features: 0x%02X", this->ota_features_);
       this->transition_ota_state_(OTAState::FEATURE_ACK);
+      this->handshake_buf_[0] =
+          ((this->ota_features_ & FEATURE_SUPPORTS_COMPRESSION) != 0 && this->backend_->supports_compression())
+              ? ota::OTA_RESPONSE_SUPPORTS_COMPRESSION
+              : ota::OTA_RESPONSE_HEADER_OK;
       [[fallthrough]];
     }
 
     case OTAState::FEATURE_ACK: {
       // Acknowledge header - 1 byte
-      // Prepare response in handshake buffer if not already done
-      if (this->handshake_buf_pos_ == 0) {
-        this->handshake_buf_[0] =
-            ((this->ota_features_ & FEATURE_SUPPORTS_COMPRESSION) != 0 && this->backend_->supports_compression())
-                ? ota::OTA_RESPONSE_SUPPORTS_COMPRESSION
-                : ota::OTA_RESPONSE_HEADER_OK;
-      }
-
       if (!this->try_write_(1, LOG_STR("ack feature"))) {
         return;
       }
-
 #ifdef USE_OTA_PASSWORD
       // If password is set, move to auth phase
       if (!this->password_.empty()) {
