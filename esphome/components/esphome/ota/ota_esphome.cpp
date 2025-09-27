@@ -760,7 +760,7 @@ bool ESPHomeOTAComponent::prepare_auth_nonce_(HashBase *hasher) {
   char *buf = reinterpret_cast<char *>(this->auth_buf_.get() + 1);
   if (!random_bytes(reinterpret_cast<uint8_t *>(buf), nonce_len)) {
     this->log_auth_warning_(LOG_STR("Random failed"));
-    this->cleanup_connection_();
+    this->send_error_and_cleanup_(ota::OTA_RESPONSE_ERROR_UNKNOWN);
     return false;
   }
 
