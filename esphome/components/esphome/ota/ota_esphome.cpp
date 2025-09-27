@@ -124,11 +124,11 @@ static const uint8_t FEATURE_SUPPORTS_SHA256_AUTH = 0x02;
 #define ALLOW_OTA_DOWNGRADE_MD5
 
 void ESPHomeOTAComponent::handle_handshake_() {
-  /// Handle the initial OTA handshake.
+  /// Handle the OTA handshake and authentication.
   ///
   /// This method is non-blocking and will return immediately if no data is available.
-  /// It reads all 5 magic bytes (0x6C, 0x26, 0xF7, 0x5C, 0x45) non-blocking
-  /// before proceeding to handle_data_(). A 10-second timeout is enforced from initial connection.
+  /// It manages the state machine through connection, magic bytes validation, feature
+  /// negotiation, and authentication before entering the blocking data transfer phase.
 
   if (this->client_ == nullptr) {
     // We already checked server_->ready() in loop(), so we can accept directly
