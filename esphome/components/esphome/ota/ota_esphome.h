@@ -69,7 +69,11 @@ class ESPHomeOTAComponent : public ota::OTAComponent {
   void log_start_(const LogString *phase);
   void log_remote_closed_(const LogString *during);
   void cleanup_connection_();
-  void send_error_and_cleanup_(ota::OTAResponseTypes error);
+  inline void send_error_and_cleanup_(ota::OTAResponseTypes error) {
+    uint8_t error_byte = static_cast<uint8_t>(error);
+    this->client_->write(&error_byte, 1);  // Best effort, non-blocking
+    this->cleanup_connection_();
+  }
   void yield_and_feed_watchdog_();
 
 #ifdef USE_OTA_PASSWORD

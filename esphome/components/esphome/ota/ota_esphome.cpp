@@ -582,12 +582,6 @@ void ESPHomeOTAComponent::cleanup_connection_() {
 #endif
 }
 
-void ESPHomeOTAComponent::send_error_and_cleanup_(ota::OTAResponseTypes error) {
-  uint8_t error_byte = static_cast<uint8_t>(error);
-  this->client_->write(&error_byte, 1);  // Best effort, non-blocking
-  this->cleanup_connection_();
-}
-
 void ESPHomeOTAComponent::yield_and_feed_watchdog_() {
   App.feed_wdt();
   delay(1);
