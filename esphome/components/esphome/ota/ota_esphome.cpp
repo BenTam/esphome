@@ -287,19 +287,11 @@ void ESPHomeOTAComponent::handle_data_() {
   size_t total = 0;
   uint32_t last_progress = 0;
   uint8_t buf[OTA_BUFFER_SIZE];
-  const size_t buf_size = sizeof(buf);
   char *sbuf = reinterpret_cast<char *>(buf);
   size_t ota_size;
 #if USE_OTA_VERSION == 2
   size_t size_acknowledged = 0;
 #endif
-
-  // The handshake and auth have already been completed
-  // We already have:
-  // - this->backend_ created
-  // - this->ota_features_ set
-  // - Feature acknowledgment sent
-  // - Authentication completed (if password was set)
 
   // Acknowledge auth OK - 1 byte
   buf[0] = ota::OTA_RESPONSE_AUTH_OK;
@@ -353,7 +345,7 @@ void ESPHomeOTAComponent::handle_data_() {
   while (total < ota_size) {
     // TODO: timeout check
     size_t remaining = ota_size - total;
-    size_t requested = remaining < buf_size ? remaining : buf_size;
+    size_t requested = remaining < OTA_BUFFER_SIZE ? remaining : OTA_BUFFER_SIZE;
     ssize_t read = this->client_->read(buf, requested);
     if (read == -1) {
       if (this->would_block_(errno)) {
@@ -363,10 +355,7 @@ void ESPHomeOTAComponent::handle_data_() {
       ESP_LOGW(TAG, "Read error, errno %d", errno);
       goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
     } else if (read == 0) {
-      // $ man recv
-      // "When  a  stream socket peer has performed an orderly shutdown, the return value will
-      // be 0 (the traditional "end-of-file" return)."
-      ESP_LOGW(TAG, "Remote closed connection");
+      ESP_LOGW(TAG, "Remote closed");
       goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
     }
 
