@@ -444,7 +444,7 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
     ssize_t read = this->client_->read(buf + at, len - at);
     if (read == -1) {
       if (!this->would_block_(errno)) {
-        ESP_LOGW(TAG, "Error reading %d bytes, errno %d", len, errno);
+        ESP_LOGW(TAG, "Read err %d bytes, errno %d", len, errno);
         return false;
       }
     } else if (read == 0) {
@@ -471,7 +471,7 @@ bool ESPHomeOTAComponent::writeall_(const uint8_t *buf, size_t len) {
     ssize_t written = this->client_->write(buf + at, len - at);
     if (written == -1) {
       if (!this->would_block_(errno)) {
-        ESP_LOGW(TAG, "Error writing %d bytes, errno %d", len, errno);
+        ESP_LOGW(TAG, "Write err %d bytes, errno %d", len, errno);
         return false;
       }
     } else {
