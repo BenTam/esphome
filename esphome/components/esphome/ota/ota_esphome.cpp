@@ -448,7 +448,7 @@ bool ESPHomeOTAComponent::readall_(uint8_t *buf, size_t len) {
         return false;
       }
     } else if (read == 0) {
-      ESP_LOGW(TAG, "Remote closed connection");
+      ESP_LOGW(TAG, "Remote closed");
       return false;
     } else {
       at += read;
