@@ -352,7 +352,7 @@ void ESPHomeOTAComponent::handle_data_() {
         this->yield_and_feed_watchdog_();
         continue;
       }
-      ESP_LOGW(TAG, "Read error, errno %d", errno);
+      ESP_LOGW(TAG, "Read err %d", errno);
       goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
     } else if (read == 0) {
       ESP_LOGW(TAG, "Remote closed");
@@ -361,7 +361,7 @@ void ESPHomeOTAComponent::handle_data_() {
 
     error_code = this->backend_->write(buf, read);
     if (error_code != ota::OTA_RESPONSE_OK) {
-      ESP_LOGW(TAG, "Flash write error, code: %d", error_code);
+      ESP_LOGW(TAG, "Flash write err %d", error_code);
       goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
     }
     total += read;
@@ -392,7 +392,7 @@ void ESPHomeOTAComponent::handle_data_() {
 
   error_code = this->backend_->end();
   if (error_code != ota::OTA_RESPONSE_OK) {
-    ESP_LOGW(TAG, "Error ending update! code: %d", error_code);
+    ESP_LOGW(TAG, "End update err %d", error_code);
     goto error;  // NOLINT(cppcoreguidelines-avoid-goto)
   }
 
