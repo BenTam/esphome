@@ -553,11 +553,6 @@ bool ESPHomeOTAComponent::try_write_(size_t to_write, const LogString *desc) {
   return this->handshake_buf_pos_ >= to_write;
 }
 
-void ESPHomeOTAComponent::transition_ota_state_(OTAState next_state) {
-  this->ota_state_ = next_state;
-  this->handshake_buf_pos_ = 0;  // Reset buffer position for next state
-}
-
 void ESPHomeOTAComponent::cleanup_connection_() {
   this->client_->close();
   this->client_ = nullptr;

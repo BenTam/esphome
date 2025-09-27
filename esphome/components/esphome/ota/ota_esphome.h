@@ -62,7 +62,10 @@ class ESPHomeOTAComponent : public ota::OTAComponent {
   inline bool would_block_(int error_code) const { return error_code == EAGAIN || error_code == EWOULDBLOCK; }
   bool handle_read_error_(ssize_t read, const LogString *desc);
   bool handle_write_error_(ssize_t written, const LogString *desc);
-  void transition_ota_state_(OTAState next_state);
+  inline void transition_ota_state_(OTAState next_state) {
+    this->ota_state_ = next_state;
+    this->handshake_buf_pos_ = 0;  // Reset buffer position for next state
+  }
 
   void log_socket_error_(const LogString *msg);
   void log_read_error_(const LogString *what);
