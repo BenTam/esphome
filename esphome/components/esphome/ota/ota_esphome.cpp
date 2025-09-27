@@ -168,7 +168,7 @@ void ESPHomeOTAComponent::handle_handshake_() {
   switch (this->ota_state_) {
     case OTAState::MAGIC_READ: {
       // Try to read remaining magic bytes (5 total)
-      if (!this->try_read_(5, LOG_STR("reading magic bytes"), LOG_STR("handshake"))) {
+      if (!this->try_read_(5, LOG_STR("read magic"))) {
         return;
       }
 
@@ -194,7 +194,7 @@ void ESPHomeOTAComponent::handle_handshake_() {
         this->handshake_buf_[1] = USE_OTA_VERSION;
       }
 
-      if (!this->try_write_(2, LOG_STR("writing magic ack"))) {
+      if (!this->try_write_(2, LOG_STR("ack magic"))) {
         return;
       }
 
@@ -206,7 +206,7 @@ void ESPHomeOTAComponent::handle_handshake_() {
 
     case OTAState::FEATURE_READ: {
       // Read features - 1 byte
-      if (!this->try_read_(1, LOG_STR("reading features"), LOG_STR("feature read"))) {
+      if (!this->try_read_(1, LOG_STR("read feature"))) {
         return;
       }
 
@@ -226,7 +226,7 @@ void ESPHomeOTAComponent::handle_handshake_() {
                 : ota::OTA_RESPONSE_HEADER_OK;
       }
 
-      if (!this->try_write_(1, LOG_STR("writing feature ack"))) {
+      if (!this->try_write_(1, LOG_STR("ack feature"))) {
         return;
       }
 
@@ -500,37 +500,37 @@ void ESPHomeOTAComponent::log_remote_closed_(const LogString *during) {
   ESP_LOGW(TAG, "Remote closed during %s", LOG_STR_ARG(during));
 }
 
-bool ESPHomeOTAComponent::handle_read_error_(ssize_t read, const LogString *error_desc, const LogString *close_desc) {
+bool ESPHomeOTAComponent::handle_read_error_(ssize_t read, const LogString *desc) {
   if (read == -1 && this->would_block_(errno)) {
     return false;  // No data yet, try again next loop
   }
 
   if (read <= 0) {
-    read == 0 ? this->log_remote_closed_(close_desc) : this->log_socket_error_(error_desc);
+    read == 0 ? this->log_remote_closed_(desc) : this->log_socket_error_(desc);
     this->cleanup_connection_();
     return false;
   }
   return true;
 }
 
-bool ESPHomeOTAComponent::handle_write_error_(ssize_t written, const LogString *error_desc) {
+bool ESPHomeOTAComponent::handle_write_error_(ssize_t written, const LogString *desc) {
   if (written == -1) {
     if (this->would_block_(errno)) {
       return false;  // Try again next loop
     }
-    this->log_socket_error_(error_desc);
+    this->log_socket_error_(desc);
     this->cleanup_connection_();
     return false;
   }
   return true;
 }
 
-bool ESPHomeOTAComponent::try_read_(size_t to_read, const LogString *error_desc, const LogString *close_desc) {
+bool ESPHomeOTAComponent::try_read_(size_t to_read, const LogString *desc) {
   // Read bytes into handshake buffer, starting at handshake_buf_pos_
   size_t bytes_to_read = to_read - this->handshake_buf_pos_;
   ssize_t read = this->client_->read(this->handshake_buf_ + this->handshake_buf_pos_, bytes_to_read);
 
-  if (!this->handle_read_error_(read, error_desc, close_desc)) {
+  if (!this->handle_read_error_(read, desc)) {
     return false;
   }
 
@@ -539,12 +539,12 @@ bool ESPHomeOTAComponent::try_read_(size_t to_read, const LogString *error_desc,
   return this->handshake_buf_pos_ >= to_read;
 }
 
-bool ESPHomeOTAComponent::try_write_(size_t to_write, const LogString *error_desc) {
+bool ESPHomeOTAComponent::try_write_(size_t to_write, const LogString *desc) {
   // Write bytes from handshake buffer, starting at handshake_buf_pos_
   size_t bytes_to_write = to_write - this->handshake_buf_pos_;
   ssize_t written = this->client_->write(this->handshake_buf_ + this->handshake_buf_pos_, bytes_to_write);
 
-  if (!this->handle_write_error_(written, error_desc)) {
+  if (!this->handle_write_error_(written, desc)) {
     return false;
   }
 
@@ -658,7 +658,7 @@ bool ESPHomeOTAComponent::handle_auth_send_() {
   size_t remaining = to_write - this->auth_buf_pos_;
 
   ssize_t written = this->client_->write(this->auth_buf_.get() + this->auth_buf_pos_, remaining);
-  if (!this->handle_write_error_(written, LOG_STR("auth write"))) {
+  if (!this->handle_write_error_(written, LOG_STR("ack auth"))) {
     return false;
   }
 
@@ -684,8 +684,7 @@ bool ESPHomeOTAComponent::handle_auth_read_() {
   size_t remaining = to_read - this->auth_buf_pos_;
   ssize_t read = this->client_->read(this->auth_buf_.get() + cnonce_offset + this->auth_buf_pos_, remaining);
 
-  auto *auth_read_desc = LOG_STR("auth read");
-  if (!this->handle_read_error_(read, auth_read_desc, auth_read_desc)) {
+  if (!this->handle_read_error_(read, LOG_STR("read auth"))) {
     return false;
   }
 
