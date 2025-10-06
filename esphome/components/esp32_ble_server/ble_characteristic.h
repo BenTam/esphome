@@ -97,6 +97,16 @@ class BLECharacteristic {
   void remove_client_from_notify_list_(uint16_t conn_id);
   ClientNotificationEntry *find_client_in_notify_list_(uint16_t conn_id);
 
+  void set_property_bit_(esp_gatt_char_prop_t bit, bool value);
+
+  __attribute__((always_inline)) inline void handle_add_char_event_(esp_ble_gatts_cb_param_t *param);
+  __attribute__((always_inline)) inline void handle_read_event_(esp_gatt_if_t gatts_if,
+                                                                esp_ble_gatts_cb_param_t *param);
+  __attribute__((always_inline)) inline void handle_write_event_(esp_gatt_if_t gatts_if,
+                                                                 esp_ble_gatts_cb_param_t *param);
+  __attribute__((always_inline)) inline void handle_exec_write_event_(esp_gatt_if_t gatts_if,
+                                                                      esp_ble_gatts_cb_param_t *param);
+
   std::unique_ptr<std::function<void(std::span<const uint8_t>, uint16_t)>> on_write_callback_;
   std::unique_ptr<std::function<void(uint16_t)>> on_read_callback_;
 

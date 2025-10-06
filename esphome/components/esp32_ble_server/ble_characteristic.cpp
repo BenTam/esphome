@@ -125,187 +125,159 @@ bool BLECharacteristic::is_created() {
   if (this->state_ != CREATING_DEPENDENTS)
     return false;
 
-  bool created = true;
   for (auto *descriptor : this->descriptors_) {
-    created &= descriptor->is_created();
+    if (!descriptor->is_created())
+      return false;
   }
-  if (created)
-    this->state_ = CREATED;
-  return this->state_ == CREATED;
+  this->state_ = CREATED;
+  return true;
 }
 
 bool BLECharacteristic::is_failed() {
   if (this->state_ == FAILED)
     return true;
 
-  bool failed = false;
   for (auto *descriptor : this->descriptors_) {
-    failed |= descriptor->is_failed();
+    if (descriptor->is_failed()) {
+      this->state_ = FAILED;
+      return true;
+    }
   }
-  if (failed)
-    this->state_ = FAILED;
-  return this->state_ == FAILED;
+  return false;
+}
+
+void BLECharacteristic::set_property_bit_(esp_gatt_char_prop_t bit, bool value) {
+  if (value) {
+    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | bit);
+  } else {
+    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~bit);
+  }
 }
 
 void BLECharacteristic::set_broadcast_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_BROADCAST);
-  } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_BROADCAST);
-  }
+  this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_BROADCAST, value);
 }
 void BLECharacteristic::set_indicate_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_INDICATE);
-  } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_INDICATE);
-  }
+  this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_INDICATE, value);
 }
 void BLECharacteristic::set_notify_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_NOTIFY);
-  } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_NOTIFY);
-  }
+  this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_NOTIFY, value);
 }
-void BLECharacteristic::set_read_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_READ);
-  } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_READ);
-  }
-}
-void BLECharacteristic::set_write_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_WRITE);
-  } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_WRITE);
-  }
-}
+void BLECharacteristic::set_read_property(bool value) { this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_READ, value); }
+void BLECharacteristic::set_write_property(bool value) { this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_WRITE, value); }
 void BLECharacteristic::set_write_no_response_property(bool value) {
-  if (value) {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ | ESP_GATT_CHAR_PROP_BIT_WRITE_NR);
+  this->set_property_bit_(ESP_GATT_CHAR_PROP_BIT_WRITE_NR, value);
+}
+
+__attribute__((always_inline)) inline void BLECharacteristic::handle_add_char_event_(esp_ble_gatts_cb_param_t *param) {
+  if (this->uuid_ != ESPBTUUID::from_uuid(param->add_char.char_uuid))
+    return;
+
+  this->handle_ = param->add_char.attr_handle;
+  for (auto *descriptor : this->descriptors_) {
+    descriptor->do_create(this);
+  }
+  this->state_ = CREATING_DEPENDENTS;
+}
+
+__attribute__((always_inline)) inline void BLECharacteristic::handle_read_event_(esp_gatt_if_t gatts_if,
+                                                                                 esp_ble_gatts_cb_param_t *param) {
+  if (param->read.handle != this->handle_ || !param->read.need_rsp)
+    return;
+
+  if (this->on_read_callback_) {
+    (*this->on_read_callback_)(param->read.conn_id);
+  }
+
+  constexpr uint16_t max_offset = 22;
+  esp_gatt_rsp_t response;
+  response.attr_value.handle = this->handle_;
+  response.attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+
+  if (param->read.is_long) {
+    uint16_t remaining = this->value_.size() - this->value_read_offset_;
+    response.attr_value.len = (remaining < max_offset) ? remaining : max_offset;
+    response.attr_value.offset = this->value_read_offset_;
+    memcpy(response.attr_value.value, this->value_.data() + response.attr_value.offset, response.attr_value.len);
+    this->value_read_offset_ = (remaining < max_offset) ? 0 : this->value_read_offset_ + max_offset;
   } else {
-    this->properties_ = (esp_gatt_char_prop_t) (this->properties_ & ~ESP_GATT_CHAR_PROP_BIT_WRITE_NR);
+    response.attr_value.offset = 0;
+    response.attr_value.len = (this->value_.size() + 1 > max_offset) ? max_offset : this->value_.size();
+    this->value_read_offset_ = (this->value_.size() + 1 > max_offset) ? max_offset : 0;
+    memcpy(response.attr_value.value, this->value_.data(), response.attr_value.len);
+  }
+
+  esp_err_t err =
+      esp_ble_gatts_send_response(gatts_if, param->read.conn_id, param->read.trans_id, ESP_GATT_OK, &response);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
+  }
+}
+
+__attribute__((always_inline)) inline void BLECharacteristic::handle_write_event_(esp_gatt_if_t gatts_if,
+                                                                                  esp_ble_gatts_cb_param_t *param) {
+  if (this->handle_ != param->write.handle)
+    return;
+
+  if (param->write.is_prep) {
+    this->value_.insert(this->value_.end(), param->write.value, param->write.value + param->write.len);
+    this->write_event_ = true;
+  } else {
+    this->set_value(ByteBuffer::wrap(param->write.value, param->write.len));
+  }
+
+  if (param->write.need_rsp) {
+    esp_gatt_rsp_t response;
+    response.attr_value.len = param->write.len;
+    response.attr_value.handle = this->handle_;
+    response.attr_value.offset = param->write.offset;
+    response.attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
+    memcpy(response.attr_value.value, param->write.value, param->write.len);
+
+    esp_err_t err =
+        esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, &response);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
+    }
+  }
+
+  if (!param->write.is_prep && this->on_write_callback_) {
+    (*this->on_write_callback_)(this->value_, param->write.conn_id);
+  }
+}
+
+__attribute__((always_inline)) inline void BLECharacteristic::handle_exec_write_event_(
+    esp_gatt_if_t gatts_if, esp_ble_gatts_cb_param_t *param) {
+  if (!this->write_event_)
+    return;
+
+  this->write_event_ = false;
+  if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC && this->on_write_callback_) {
+    (*this->on_write_callback_)(this->value_, param->exec_write.conn_id);
+  }
+
+  esp_err_t err =
+      esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, nullptr);
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
   }
 }
 
 void BLECharacteristic::gatts_event_handler(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
                                             esp_ble_gatts_cb_param_t *param) {
   switch (event) {
-    case ESP_GATTS_ADD_CHAR_EVT: {
-      if (this->uuid_ == ESPBTUUID::from_uuid(param->add_char.char_uuid)) {
-        this->handle_ = param->add_char.attr_handle;
-
-        for (auto *descriptor : this->descriptors_) {
-          descriptor->do_create(this);
-        }
-
-        this->state_ = CREATING_DEPENDENTS;
-      }
+    case ESP_GATTS_ADD_CHAR_EVT:
+      this->handle_add_char_event_(param);
       break;
-    }
-    case ESP_GATTS_READ_EVT: {
-      if (param->read.handle != this->handle_)
-        break;  // Not this characteristic
-
-      if (!param->read.need_rsp)
-        break;  // For some reason you can request a read but not want a response
-
-      if (this->on_read_callback_) {
-        (*this->on_read_callback_)(param->read.conn_id);
-      }
-
-      uint16_t max_offset = 22;
-
-      esp_gatt_rsp_t response;
-      if (param->read.is_long) {
-        if (this->value_.size() - this->value_read_offset_ < max_offset) {
-          //  Last message in the chain
-          response.attr_value.len = this->value_.size() - this->value_read_offset_;
-          response.attr_value.offset = this->value_read_offset_;
-          memcpy(response.attr_value.value, this->value_.data() + response.attr_value.offset, response.attr_value.len);
-          this->value_read_offset_ = 0;
-        } else {
-          response.attr_value.len = max_offset;
-          response.attr_value.offset = this->value_read_offset_;
-          memcpy(response.attr_value.value, this->value_.data() + response.attr_value.offset, response.attr_value.len);
-          this->value_read_offset_ += max_offset;
-        }
-      } else {
-        response.attr_value.offset = 0;
-        if (this->value_.size() + 1 > max_offset) {
-          response.attr_value.len = max_offset;
-          this->value_read_offset_ = max_offset;
-        } else {
-          response.attr_value.len = this->value_.size();
-        }
-        memcpy(response.attr_value.value, this->value_.data(), response.attr_value.len);
-      }
-
-      response.attr_value.handle = this->handle_;
-      response.attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
-
-      esp_err_t err =
-          esp_ble_gatts_send_response(gatts_if, param->read.conn_id, param->read.trans_id, ESP_GATT_OK, &response);
-      if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
-      }
+    case ESP_GATTS_READ_EVT:
+      this->handle_read_event_(gatts_if, param);
       break;
-    }
-    case ESP_GATTS_WRITE_EVT: {
-      if (this->handle_ != param->write.handle)
-        break;
-
-      if (param->write.is_prep) {
-        this->value_.insert(this->value_.end(), param->write.value, param->write.value + param->write.len);
-        this->write_event_ = true;
-      } else {
-        this->set_value(ByteBuffer::wrap(param->write.value, param->write.len));
-      }
-
-      if (param->write.need_rsp) {
-        esp_gatt_rsp_t response;
-
-        response.attr_value.len = param->write.len;
-        response.attr_value.handle = this->handle_;
-        response.attr_value.offset = param->write.offset;
-        response.attr_value.auth_req = ESP_GATT_AUTH_REQ_NONE;
-        memcpy(response.attr_value.value, param->write.value, param->write.len);
-
-        esp_err_t err =
-            esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, &response);
-
-        if (err != ESP_OK) {
-          ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
-        }
-      }
-
-      if (!param->write.is_prep) {
-        if (this->on_write_callback_) {
-          (*this->on_write_callback_)(this->value_, param->write.conn_id);
-        }
-      }
-
+    case ESP_GATTS_WRITE_EVT:
+      this->handle_write_event_(gatts_if, param);
       break;
-    }
-
-    case ESP_GATTS_EXEC_WRITE_EVT: {
-      if (!this->write_event_)
-        break;
-      this->write_event_ = false;
-      if (param->exec_write.exec_write_flag == ESP_GATT_PREP_WRITE_EXEC) {
-        if (this->on_write_callback_) {
-          (*this->on_write_callback_)(this->value_, param->exec_write.conn_id);
-        }
-      }
-      esp_err_t err =
-          esp_ble_gatts_send_response(gatts_if, param->write.conn_id, param->write.trans_id, ESP_GATT_OK, nullptr);
-      if (err != ESP_OK) {
-        ESP_LOGE(TAG, "esp_ble_gatts_send_response failed: %d", err);
-      }
+    case ESP_GATTS_EXEC_WRITE_EVT:
+      this->handle_exec_write_event_(gatts_if, param);
       break;
-    }
     default:
       break;
   }
