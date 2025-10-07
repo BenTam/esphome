@@ -414,7 +414,7 @@ void APIServer::handle_action_response(uint32_t call_id, bool success, const std
   if (it != this->action_response_callbacks_.end()) {
     auto callback = std::move(it->second);
     this->action_response_callbacks_.erase(it);
-    auto response = std::make_shared<ActionResponse>(success, error_message);
+    ActionResponse response(success, error_message);
     callback(response);
   }
 }
@@ -425,7 +425,7 @@ void APIServer::handle_action_response(uint32_t call_id, bool success, const std
   if (it != this->action_response_callbacks_.end()) {
     auto callback = std::move(it->second);
     this->action_response_callbacks_.erase(it);
-    auto response = std::make_shared<ActionResponse>(success, error_message, response_data, response_data_len);
+    ActionResponse response(success, error_message, response_data, response_data_len);
     callback(response);
   }
 }
