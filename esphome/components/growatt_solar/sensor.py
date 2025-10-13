@@ -85,6 +85,18 @@ PV_SENSORS = {
         device_class=DEVICE_CLASS_POWER,
         state_class=STATE_CLASS_MEASUREMENT,
     ),
+    CONF_ENERGY_PRODUCTION_DAY: sensor.sensor_schema(
+        unit_of_measurement=UNIT_WATT,
+        accuracy_decimals=0,
+        device_class=DEVICE_CLASS_POWER,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ),
+    CONF_TOTAL_ENERGY_PRODUCTION: sensor.sensor_schema(
+        unit_of_measurement=UNIT_WATT,
+        accuracy_decimals=0,
+        device_class=DEVICE_CLASS_POWER,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ),
 }
 
 PHASE_SCHEMA = cv.Schema(
