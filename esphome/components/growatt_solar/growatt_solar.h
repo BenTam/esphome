@@ -54,6 +54,12 @@ class GrowattSolar : public PollingComponent, public modbus::ModbusDevice {
   void set_active_power_sensor_pv(uint8_t pv, sensor::Sensor *active_power_sensor) {
     this->pvs_[pv].active_power_sensor_ = active_power_sensor;
   }
+  void set_today_production_pv(uint8_t pv, sensor::Sensor *today_production) {
+    this->pvs_[pv].today_production_ = today_production;
+  }
+  void set_total_energy_production_pv(uint8_t pv, sensor::Sensor *total_energy_production) {
+    this->pvs_[pv].total_energy_production_ = total_energy_production;
+  }
 
  protected:
   bool waiting_to_update_;
@@ -68,6 +74,8 @@ class GrowattSolar : public PollingComponent, public modbus::ModbusDevice {
     sensor::Sensor *voltage_sensor_{nullptr};
     sensor::Sensor *current_sensor_{nullptr};
     sensor::Sensor *active_power_sensor_{nullptr};
+    sensor::Sensor *today_production_{nullptr};
+    sensor::Sensor *total_energy_production_{nullptr};
   } pvs_[2];
 
   sensor::Sensor *inverter_status_{nullptr};
