@@ -74,8 +74,8 @@ class GrowattSolar : public PollingComponent, public modbus::ModbusDevice {
     sensor::Sensor *voltage_sensor_{nullptr};
     sensor::Sensor *current_sensor_{nullptr};
     sensor::Sensor *active_power_sensor_{nullptr};
-    sensor::Sensor *today_production_{nullptr};
-    sensor::Sensor *total_energy_production_{nullptr};
+    sensor::Sensor *today_production_sensor_{nullptr};
+    sensor::Sensor *total_energy_production_sensor_{nullptr};
   } pvs_[2];
 
   sensor::Sensor *inverter_status_{nullptr};
