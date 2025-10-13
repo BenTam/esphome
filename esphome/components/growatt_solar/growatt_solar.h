@@ -55,10 +55,10 @@ class GrowattSolar : public PollingComponent, public modbus::ModbusDevice {
 //    this->pvs_[pv].active_power_sensor_ = active_power_sensor;
 //  }
   void set_today_production_pv(uint8_t pv, sensor::Sensor *today_production) {
-    this->pvs_[pv].today_production_sensor_ = today_production;
+    this->pvs_[pv].today_production_sensor_ = today_production_sensor;
   }
   void set_total_energy_production_pv(uint8_t pv, sensor::Sensor *total_energy_production) {
-    this->pvs_[pv].total_energy_production_sensor_ = total_energy_production;
+    this->pvs_[pv].total_energy_production_sensor_ = total_energy_production_sensor;
   }
 
  protected:
