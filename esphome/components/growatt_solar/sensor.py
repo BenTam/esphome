@@ -40,6 +40,8 @@ CONF_PV_ACTIVE_POWER = "pv_active_power"
 CONF_INVERTER_MODULE_TEMP = "inverter_module_temp"
 CONF_PROTOCOL_VERSION = "protocol_version"
 
+CONF_BATTERY_VOLTAGE = "battery voltage"
+
 AUTO_LOAD = ["modbus"]
 CODEOWNERS = ["@leeuwte"]
 
@@ -160,6 +162,11 @@ CONFIG_SCHEMA = (
                 unit_of_measurement=UNIT_CELSIUS,
                 accuracy_decimals=1,
                 state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_BATTERY_VOLTAGE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_VOLTAGE,
             ),
         }
     )
