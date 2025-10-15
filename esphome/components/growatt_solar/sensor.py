@@ -229,3 +229,7 @@ async def to_code(config):
             if sensor_type in pv_config:
                 sens = await sensor.new_sensor(pv_config[sensor_type])
                 cg.add(getattr(var, f"set_{sensor_type}_sensor_pv")(i, sens))
+                
+    if CONF_BATTERY_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_BATTERY_VOLTAGE])
+        cg.add(var.set_battery_voltage_sensor(sens))
