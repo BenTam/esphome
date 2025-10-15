@@ -40,7 +40,7 @@ CONF_PV_ACTIVE_POWER = "pv_active_power"
 CONF_INVERTER_MODULE_TEMP = "inverter_module_temp"
 CONF_PROTOCOL_VERSION = "protocol_version"
 
-CONF_BATTERY_VOLTAGE = "battery voltage"
+CONF_BATTERY_VOLTAGE = "battery_voltage"
 
 AUTO_LOAD = ["modbus"]
 CODEOWNERS = ["@leeuwte"]
