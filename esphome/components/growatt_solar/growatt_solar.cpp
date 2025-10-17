@@ -135,7 +135,7 @@ void GrowattSolar::on_modbus_data(const std::vector<uint8_t> &data) {
       publish_1_reg_sensor_state(this->inverter_module_temp_, 93, ONE_DEC_UNIT);
 
 //      publish_1_reg_sensor_state(this->battery_voltage_sensor_, 1013, ONE_DEC_UNIT);
-      publish_1_reg_sensor_state(this->battery_voltage_sensor_, 3, ONE_DEC_UNIT);
+//      publish_1_reg_sensor_state(this->battery_voltage_sensor_, 3, ONE_DEC_UNIT);
 //      publish_1_reg_sensor_state(this->battery_voltage_sensor_, 17, ONE_DEC_UNIT);
 //      publish_1_reg_sensor_state(this->battery_voltage_sensor_, 28, ONE_DEC_UNIT);
       break;
